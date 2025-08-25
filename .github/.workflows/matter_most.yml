@@ -1,0 +1,23 @@
+name: MM ping
+
+on:
+  workflow_dispatch:  
+  push:               
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create JSON payload
+        run: |
+          cat > payload.json <<'EOF'
+          {"text":"hello from GitHub Actions"}
+          EOF
+
+      - name: Post to Mattermost
+        run: |
+          curl -sS -v -X POST \
+            -H 'Content-Type: application/json' \
+            --data-binary @payload.json \
+            'https://meeting.ssafy.com/hooks/4qcxaequ5ido7b4yjbxog1e3fo' \
+            -w '\nHTTP %{http_code}\n'
