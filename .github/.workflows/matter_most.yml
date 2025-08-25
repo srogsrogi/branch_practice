@@ -1,39 +1,23 @@
-name: Notify Mattermost on Push
+name: MM ping
 
 on:
-  push:
-    branches: ["**"]
+  workflow_dispatch:  
+  push:               
 
 jobs:
-  notify:
+  ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ensure jq is available
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Build payload JSON safely
+      - name: Create JSON payload
         run: |
-          REPO="${GITHUB_REPOSITORY}"
-          BRANCH="${GITHUB_REF_NAME}"
-          ACTOR="${GITHUB_ACTOR}"
-          COMMITS=$(jq -r '.commits | map("- " + .message + " (" + .id[0:7] + ")") | join("\n")' <<< '${{ toJson(github.event) }}')
-          [ -z "$COMMITS" ] && COMMITS="- (no commit messages)"
+          cat > payload.json <<'EOF'
+          {"text":"hello from GitHub Actions"}
+          EOF
 
-          TEXT="📢 *${REPO}*에 push 발생
-브랜치: \`${BRANCH}\`
-작성자: ${ACTOR}
-
-${COMMITS}"
-
-          # jq로 올바른 JSON 생성 → payload.json
-          jq -n --arg t "$TEXT" '{text:$t}' > payload.json
-          echo "==== payload.json ===="
-          cat payload.json
-
-      - name: Send to Mattermost
-        env:
-          HOOK: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+      - name: Post to Mattermost
         run: |
-          curl -sS -X POST "$HOOK" \
+          curl -sS -v -X POST \
             -H 'Content-Type: application/json' \
-            --data-binary @payload.json
+            --data-binary @payload.json \
+            'https://meeting.ssafy.com/hooks/4qcxaequ5ido7b4yjbxog1e3fo' \
+            -w '\nHTTP %{http_code}\n'
