@@ -20,7 +20,7 @@ jobs:
             const evt = JSON.parse(process.env.GITHUB_EVENT || "{}");
             const commits = (evt.commits||[]).map(c => `- ${c.message} (${c.id.slice(0,7)})`).join("\n") || "- (no commit messages)";
             const text =
-              `📢 *${process.env.REPO}*에 push 발생\n` +
+              `*${process.env.REPO}*에 push event 발생\n` +
               `브랜치: \`${process.env.BRANCH}\`\n작성자: ${process.env.ACTOR}\n\n` +
               commits;
             require("fs").writeFileSync("payload.json", JSON.stringify({ text }));
