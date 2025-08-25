@@ -1,7 +1,7 @@
 name: Notify Mattermost on Push
 
 on:
-  push:            # 모든 브랜치에 푸시될 때 실행
+  push:
     branches: ["**"]
 
 jobs:
@@ -10,12 +10,12 @@ jobs:
 
     steps:
       - name: Build payload JSON
+        env:
+          GITHUB_EVENT: ${{ toJson(github.event) }}
+          REPO:   ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR:  ${{ github.actor }}
         run: |
-          REPO="${GITHUB_REPOSITORY}"
-          BRANCH="${GITHUB_REF_NAME}"
-          ACTOR="${GITHUB_ACTOR}"
-
-          # 커밋 메시지 리스트 만들기
           node -e '
             const evt = JSON.parse(process.env.GITHUB_EVENT || "{}");
             const commits = (evt.commits||[]).map(c => `- ${c.message} (${c.id.slice(0,7)})`).join("\n") || "- (no commit messages)";
@@ -23,18 +23,13 @@ jobs:
               `📢 *${process.env.REPO}*에 push 발생\n` +
               `브랜치: \`${process.env.BRANCH}\`\n작성자: ${process.env.ACTOR}\n\n` +
               commits;
-            require("fs").writeFileSync("payload.json", JSON.stringify({text}));
-          ' 
-
-        env:
-          GITHUB_EVENT: ${{ toJson(github.event) }}
-          REPO:   ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
-          ACTOR:  ${{ github.actor }}
+            require("fs").writeFileSync("payload.json", JSON.stringify({ text }));
+          '
 
       - name: Send to Mattermost
         run: |
           curl -sS -X POST \
             -H 'Content-Type: application/json' \
             --data-binary @payload.json \
-            '${{ secrets.MATTERMOST_WEBHOOK_URL }}'
+            'https://meeting.ssafy.com/hooks/4qcxaequ5ido7b4yjbxog1e3fo' \
+            -w '\nHTTP %{http_code}\n'
