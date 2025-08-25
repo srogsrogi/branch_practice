@@ -1,0 +1,33 @@
+name: Notify Mattermost on Push
+
+on:
+  push:           # 모든 브랜치
+    branches: ["**"]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compose message
+        id: build
+        run: |
+          REPO="${GITHUB_REPOSITORY}"
+          BRANCH="${GITHUB_REF_NAME}"
+          ACTOR="${GITHUB_ACTOR}"
+          # 커밋 리스트 한 줄씩 뽑기
+          COMMITS=$(jq -r '.commits | map("- " + .message + " (" + .id[0:7] + ")") | join("\n")' <<< '${{ toJson(github.event) }}')
+          [ -z "$COMMITS" ] && COMMITS="- (no commit messages)"
+
+          TEXT="*${REPO}*에 push 발생\n브랜치: \`${BRANCH}\`\n작성자: ${ACTOR}\n\n${COMMITS}"
+
+          # Mattermost용 JSON 만들기
+          echo "payload=$(jq -n --arg t "$TEXT" '{text:$t}')" >> $GITHUB_OUTPUT
+
+      - name: Send to Mattermost
+        env:
+          HOOK: ${{ secrets.MATTERMOST_WEBHOOK_URL }}
+          PAYLOAD: ${{ steps.build.outputs.payload }}
+        run: |
+          curl -sS -X POST "$HOOK" \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD"
