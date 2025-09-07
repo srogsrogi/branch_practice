@@ -1,0 +1,86 @@
+deploy:
+  needs: build-and-push
+  runs-on: ubuntu-latest
+  steps:
+    - name: Deploy to EC2 with Docker Compose
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          set -e
+          APP_DIR="/home/ubuntu/app"
+          mkdir -p $APP_DIR
+          cd $APP_DIR
+
+          # (선택) Docker Hub 로그인 - 이미지가 private이면 필요
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+          # 네트워크(최초 1회)
+          docker network create appnet || true
+
+          # .env 생성 (민감정보는 전부 GitHub Secrets에서 주입)
+          cat > .env << 'EOF'
+          # Web → MySQL 접속
+          DB_HOST=db
+          DB_USER=${{ secrets.MYSQL_USER }}
+          DB_PASS=${{ secrets.MYSQL_PASSWORD }}
+          DB_NAME=${{ secrets.MYSQL_DATABASE }}
+
+          # MySQL 컨테이너 초기화
+          MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+          MYSQL_USER=${{ secrets.MYSQL_USER }}
+          MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+          EOF
+
+          # docker-compose.prod.yml 생성
+          cat > docker-compose.prod.yml << 'EOF'
+          version: "3.9"
+
+          services:
+            db:
+              image: mysql:8
+              container_name: mysql_db
+              restart: always
+              env_file: .env
+              # 보안을 위해 외부 포트 노출 안 함 (web만 DB에 붙음)
+              volumes:
+                - mysql_data:/var/lib/mysql
+              networks: [appnet]
+              healthcheck:
+                test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+                interval: 5s
+                timeout: 3s
+                retries: 30
+
+            web:
+              image: ${DOCKERHUB_IMAGE}
+              container_name: branch_practice_web
+              restart: always
+              env_file: .env
+              ports:
+                - "80:8000"
+              depends_on:
+                db:
+                  condition: service_healthy
+              networks: [appnet]
+
+          networks:
+            appnet:
+              external: true
+
+          volumes:
+            mysql_data:
+          EOF
+
+          # DOCKERHUB 이미지 경로 치환
+          sed -i "s|\${DOCKERHUB_IMAGE}|${{ secrets.DOCKERHUB_USERNAME }}/branch_practice:latest|g" docker-compose.prod.yml
+
+          # 배포
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
+
+          # 오래된 이미지 정리
+          docker image prune -f || true
