@@ -110,7 +110,8 @@ jobs:
                   interval: 5s
                   timeout: 3s
                   retries: 30
-
+                ports:
+                  - "3306:3306"
               web:
                 image: ${DOCKERHUB_IMAGE}
                 container_name: branch_practice_web
