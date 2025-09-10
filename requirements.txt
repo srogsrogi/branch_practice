@@ -3,3 +3,4 @@ fastapi
 uvicorn
 ruff
 mysql-connector-python
+
